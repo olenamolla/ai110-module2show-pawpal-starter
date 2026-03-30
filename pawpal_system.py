@@ -48,6 +48,7 @@ class Task:
     is_completed: int = 0
     recurrence: str = "none"  # "none", "daily", or "weekly"
     due_date: date | None = None  # when this task is due
+    preferred_time: str | None = None  # optional "HH:MM" start time
 
     def update(self, **kwargs) -> None:
         """Update one or more task attributes by keyword."""
@@ -86,6 +87,7 @@ class Task:
             frequency=self.frequency,
             recurrence=self.recurrence,
             due_date=self.due_date + delta,
+            preferred_time=self.preferred_time,
         )
 
 
@@ -197,11 +199,20 @@ class Scheduler:
 
             if time_needed <= remaining_minutes:
                 for occ in range(1, task.frequency + 1):
-                    start = self._minutes_to_time(current_minutes)
+                    if task.preferred_time is not None:
+                        start = task.preferred_time
+                    else:
+                        start = self._minutes_to_time(current_minutes)
                     self.daily_plan.append(
                         ScheduledSlot(task=task, start_time=start, occurrence=occ)
                     )
-                    current_minutes += task.duration
+                    if task.preferred_time is not None:
+                        current_minutes = max(
+                            current_minutes,
+                            self._time_to_minutes(task.preferred_time) + task.duration,
+                        )
+                    else:
+                        current_minutes += task.duration
                 remaining_minutes -= time_needed
                 self._reasoning.append(
                     f"Scheduled '{task.name}' ({task.priority} priority, "
@@ -272,6 +283,10 @@ class Scheduler:
             end_a = start_a + slots[i].task.duration
 
             for j in range(i + 1, len(slots)):
+                # Skip different occurrences of the same task
+                if slots[i].task is slots[j].task:
+                    continue
+
                 start_b = self._time_to_minutes(slots[j].start_time)
                 end_b = start_b + slots[j].task.duration
 
