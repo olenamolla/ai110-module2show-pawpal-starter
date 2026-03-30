@@ -15,17 +15,21 @@ class Pet:
     tasks: list["Task"] = field(default_factory=list)
 
     def add_task(self, task: "Task") -> None:
+        """Append a task to this pet's task list."""
         self.tasks.append(task)
 
     def remove_task(self, task: "Task") -> None:
+        """Remove a task from this pet's task list."""
         self.tasks.remove(task)
 
     def update(self, **kwargs) -> None:
+        """Update one or more pet attributes by keyword."""
         for key, value in kwargs.items():
             if hasattr(self, key):
                 setattr(self, key, value)
 
     def summary(self) -> str:
+        """Return a human-readable one-line description of this pet."""
         base = f"{self.name} — {self.age}-year-old {self.color} {self.breed} ({self.species})"
         if self.special_instructions:
             base += f" | Note: {self.special_instructions}"
@@ -42,18 +46,22 @@ class Task:
     is_completed: int = 0
 
     def update(self, **kwargs) -> None:
+        """Update one or more task attributes by keyword."""
         for key, value in kwargs.items():
             if hasattr(self, key):
                 setattr(self, key, value)
 
     def mark_complete(self) -> None:
+        """Increment completion count by one, up to the task's frequency."""
         if not self.is_fully_done():
             self.is_completed += 1
 
     def is_fully_done(self) -> bool:
+        """Return True if all occurrences of this task are completed."""
         return self.is_completed >= self.frequency
 
     def total_time(self) -> int:
+        """Return total daily time needed: duration * frequency."""
         return self.duration * self.frequency
 
 
@@ -73,17 +81,21 @@ class Owner:
         self.pets: list[Pet] = []
 
     def update(self, **kwargs) -> None:
+        """Update one or more owner attributes by keyword."""
         for key, value in kwargs.items():
             if hasattr(self, key):
                 setattr(self, key, value)
 
     def add_pet(self, pet: Pet) -> None:
+        """Register a pet under this owner."""
         self.pets.append(pet)
 
     def remove_pet(self, pet: Pet) -> None:
+        """Remove a pet from this owner's list."""
         self.pets.remove(pet)
 
     def get_all_tasks(self) -> list[tuple[Pet, Task]]:
+        """Collect all tasks across all pets as (pet, task) tuples."""
         all_tasks = []
         for pet in self.pets:
             for task in pet.tasks:
@@ -100,15 +112,18 @@ class Scheduler:
         self._reasoning: list[str] = []
 
     def _minutes_to_time(self, total_minutes: int) -> str:
+        """Convert total minutes since midnight to 'HH:MM' format."""
         hours = total_minutes // 60
         minutes = total_minutes % 60
         return f"{hours:02d}:{minutes:02d}"
 
     def _time_to_minutes(self, time_str: str) -> int:
+        """Convert 'HH:MM' format to total minutes since midnight."""
         hours, minutes = time_str.split(":")
         return int(hours) * 60 + int(minutes)
 
     def generate_plan(self) -> list[ScheduledSlot]:
+        """Build a daily schedule sorted by priority, fitting within the owner's time budget."""
         self.daily_plan = []
         self._unscheduled = []
         self._reasoning = []
@@ -147,7 +162,9 @@ class Scheduler:
         return self.daily_plan
 
     def get_reasoning(self) -> str:
+        """Return a human-readable explanation of all scheduling decisions."""
         return "\n".join(self._reasoning)
 
     def get_unscheduled_tasks(self) -> list[Task]:
+        """Return tasks that were dropped due to insufficient time."""
         return list(self._unscheduled)
