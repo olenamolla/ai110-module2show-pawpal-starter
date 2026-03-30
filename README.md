@@ -50,3 +50,26 @@ pip install -r requirements.txt
 5. Add tests to verify key behaviors.
 6. Connect your logic to the Streamlit UI in `app.py`.
 7. Refine UML so it matches what you actually built.
+
+## Testing PawPal+
+
+### Running the tests
+
+```bash
+python -m pytest tests/test_pawpal.py -v
+```
+
+### What the tests cover
+
+The test suite in `tests/test_pawpal.py` includes **17 tests** across four areas:
+
+- **Task completion** — Verifies `mark_complete()` increments correctly, caps at the task frequency, and tracks `is_fully_done()` status.
+- **Pet task management** — Confirms adding tasks to a pet updates its task list.
+- **Sorting correctness** — Ensures `sort_by_time()` returns slots in chronological order, handles duplicate start times without data loss, and works on an empty plan.
+- **Recurrence logic** — Validates that completing a daily task creates a new task due the next day, weekly tasks advance by 7 days, non-recurring tasks produce no next occurrence, multi-frequency tasks require all completions before recurring, and a missing `due_date` returns `None` safely.
+- **Conflict detection** — Checks that overlapping slots are flagged with the correct overlap duration, identical start times are caught, adjacent (non-overlapping) slots produce no warnings, and an empty plan returns cleanly.
+- **Scheduling edge cases** — Tests a pet with no tasks, an owner with zero available minutes, and a budget that exactly fits all tasks (boundary condition).
+
+### Confidence Level
+
+**4 out of 5 stars** — The core scheduling, sorting, recurrence, and conflict detection logic is well covered with both happy-path and edge-case tests. The one star is withheld because the test suite does not yet cover the Streamlit UI layer, multi-pet cross-priority scheduling, or integration between `generate_plan()` and `detect_conflicts()` in sequence.
