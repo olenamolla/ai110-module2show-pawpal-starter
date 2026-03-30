@@ -7,6 +7,20 @@
 - Briefly describe your initial UML design.
 - What classes did you include, and what responsibilities did you assign to each?
 
+**Initial UML Design:**
+
+The system is built around four classes, each with a clear responsibility:
+
+- **Pet** (dataclass): Holds all descriptive information about a pet — name, species, breed, age, color, favorite activities, and special instructions (e.g., illnesses or dietary needs). Its main responsibility is storing pet data and providing a readable summary. Breed and color are display-only and do not affect scheduling.
+
+- **Owner**: Represents the pet owner and acts as the central hub of the system. It stores the owner's name, daily available time (in minutes), and preferences. It also manages lists of pets and tasks, with methods to add, remove, and filter them. An owner can have multiple pets.
+
+- **Task** (dataclass): Represents a single care activity such as a walk, feeding, or grooming session. Each task has a name, category, duration, priority (high/medium/low), frequency (how many times per day), and a reference to the pet it belongs to. It tracks completion count against frequency so repeating tasks (e.g., feeding twice a day) are handled correctly.
+
+- **Scheduler**: Contains the core planning logic. It takes an Owner, reads their tasks and available time, and generates an optimized daily plan. It sorts tasks by priority, fits them within the time budget, and can explain its reasoning. It also tracks which tasks were dropped if time ran out.
+
+The relationships are: Owner has many Pets, Owner has many Tasks, each Task is assigned to one Pet, and Scheduler reads from the Owner to build the plan.
+
 **Core User Actions:**
 
 1. **Add a pet (and owner profile):** The user enters basic information about themselves (name, time available per day) and their pet (name, species, age). This sets up the context the scheduler needs to build a personalized plan.
@@ -18,7 +32,20 @@
 **b. Design changes**
 
 - Did your design change during implementation?
+
+Yes. 
+
 - If yes, describe at least one change and why you made it.
+
+Yes, the design changed after reviewing the skeleton for logic bottlenecks. Three issues were identified and addressed:
+
+1. **Added a new `ScheduledSlot` class.** The original design stored the daily plan as a flat `list[Task]`, but this caused two problems: repeating tasks (e.g., feeding twice a day) would mean the same Task object appearing multiple times with no way to tell them apart, and there was no concept of *when* each task happens. `ScheduledSlot` wraps a Task with a `start_time` (e.g., "08:00") and an `occurrence` number (1st feeding vs 2nd feeding), giving each entry in the plan a clear identity and time placement.
+
+2. **Added reasoning storage to the Scheduler.** The original `get_reasoning()` method had no data to work with — `generate_plan()` had no way to record *why* it made decisions. A private `_reasoning: list[str]` attribute was added so the scheduler can log explanations as it builds the plan (e.g., "Medication scheduled first because it is high priority").
+
+3. **Added `_unscheduled` tracking and `day_start` to the Scheduler.** A private `_unscheduled: list[Task]` attribute was added so `get_unscheduled_tasks()` has a concrete list to return. A `day_start` parameter (defaulting to "08:00") was also added so the scheduler knows what time to begin assigning slots from.
+
+4. **Moved task ownership from Owner to Pet.** Originally, Owner held a flat `tasks` list and each Task had a `pet` reference pointing back. This was redundant. Tasks now live on each Pet (`pet.tasks`), and Owner collects them via `get_all_tasks()` which returns `(pet, task)` tuples across all pets. This makes the data flow cleaner: `Scheduler → Owner → Pets → Tasks`.
 
 ---
 
