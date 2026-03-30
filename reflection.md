@@ -59,7 +59,12 @@ Yes, the design changed after reviewing the skeleton for logic bottlenecks. Thre
 **b. Tradeoffs**
 
 - Describe one tradeoff your scheduler makes.
+
+The scheduler uses a greedy single-pass approach: it sorts tasks by priority and packs them in order, never backtracking to try a better combination. This means a large high-priority task could leave a gap too small for the next task, even if rearranging would fit more overall.
+
 - Why is that tradeoff reasonable for this scenario?
+
+This is reasonable because pet owners need critical tasks (meds, feeding) guaranteed first, and the simplicity keeps the scheduler's decisions easy to understand.
 
 ---
 

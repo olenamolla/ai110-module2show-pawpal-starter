@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field
+from datetime import date, timedelta
 
 PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
+RECURRENCE_DELTAS = {"daily": timedelta(days=1), "weekly": timedelta(weeks=1)}
 
 
 @dataclass
@@ -44,6 +46,8 @@ class Task:
     priority: str  # high, medium, low
     frequency: int = 1
     is_completed: int = 0
+    recurrence: str = "none"  # "none", "daily", or "weekly"
+    due_date: date | None = None  # when this task is due
 
     def update(self, **kwargs) -> None:
         """Update one or more task attributes by keyword."""
@@ -63,6 +67,26 @@ class Task:
     def total_time(self) -> int:
         """Return total daily time needed: duration * frequency."""
         return self.duration * self.frequency
+
+    def create_next_occurrence(self) -> "Task | None":
+        """Create a fresh Task for the next recurrence period.
+
+        Uses timedelta to advance the due_date by 1 day (daily) or 7 days
+        (weekly). Returns None for non-recurring tasks or tasks without a
+        due_date. The returned Task has is_completed reset to 0.
+        """
+        delta = RECURRENCE_DELTAS.get(self.recurrence)
+        if delta is None or self.due_date is None:
+            return None
+        return Task(
+            name=self.name,
+            category=self.category,
+            duration=self.duration,
+            priority=self.priority,
+            frequency=self.frequency,
+            recurrence=self.recurrence,
+            due_date=self.due_date + delta,
+        )
 
 
 @dataclass
@@ -101,6 +125,37 @@ class Owner:
             for task in pet.tasks:
                 all_tasks.append((pet, task))
         return all_tasks
+
+    def filter_tasks(
+        self,
+        pet_name: str | None = None,
+        completed: bool | None = None,
+    ) -> list[tuple[Pet, Task]]:
+        """Filter tasks by pet name and/or completion status.
+
+        Args:
+            pet_name: If provided, only include tasks belonging to this pet.
+            completed: If True, only fully done tasks. If False, only
+                       incomplete tasks. If None, include all.
+
+        Returns:
+            A filtered list of (pet, task) tuples.
+        """
+        results = self.get_all_tasks()
+
+        if pet_name is not None:
+            results = [
+                (pet, task) for pet, task in results
+                if pet.name.lower() == pet_name.lower()
+            ]
+
+        if completed is not None:
+            results = [
+                (pet, task) for pet, task in results
+                if task.is_fully_done() == completed
+            ]
+
+        return results
 
 
 class Scheduler:
@@ -160,6 +215,81 @@ class Scheduler:
                 )
 
         return self.daily_plan
+
+    def sort_by_time(self) -> list[ScheduledSlot]:
+        """Sort the daily plan chronologically by start_time.
+
+        Uses sorted() with a lambda key that converts each slot's "HH:MM"
+        string to total minutes for correct numerical ordering. Mutates
+        self.daily_plan in place and returns the sorted list.
+        """
+        self.daily_plan = sorted(
+            self.daily_plan,
+            key=lambda slot: self._time_to_minutes(slot.start_time),
+        )
+        return self.daily_plan
+
+    def mark_task_complete(self, pet: "Pet", task: Task) -> "Task | None":
+        """Mark a task complete and auto-schedule the next recurrence.
+
+        Increments the task's completion counter. Once all occurrences for
+        the current period are done (is_fully_done), calls
+        create_next_occurrence() to generate a new Task with an advanced
+        due_date and adds it to the pet's task list.
+
+        Returns the newly created Task, or None if the task is non-recurring
+        or not yet fully done.
+        """
+        task.mark_complete()
+
+        if task.is_fully_done():
+            next_task = task.create_next_occurrence()
+            if next_task is not None:
+                pet.add_task(next_task)
+                self._reasoning.append(
+                    f"'{task.name}' completed for {pet.name}. "
+                    f"Next {task.recurrence} occurrence created for {next_task.due_date}."
+                )
+                return next_task
+
+        return None
+
+    def detect_conflicts(self) -> list[str]:
+        """Detect time overlaps between any two slots in the daily plan.
+
+        Compares every pair of slots (O(n^2)) using interval overlap logic:
+        two slots conflict when start_a < end_b and start_b < end_a. For
+        each conflict, calculates the exact overlap duration in minutes.
+
+        Returns a list of human-readable warning strings describing each
+        conflict. An empty list means no conflicts were found.
+        """
+        warnings: list[str] = []
+        slots = self.daily_plan
+
+        for i in range(len(slots)):
+            start_a = self._time_to_minutes(slots[i].start_time)
+            end_a = start_a + slots[i].task.duration
+
+            for j in range(i + 1, len(slots)):
+                start_b = self._time_to_minutes(slots[j].start_time)
+                end_b = start_b + slots[j].task.duration
+
+                # Overlap exists when each slot starts before the other ends
+                if start_a < end_b and start_b < end_a:
+                    overlap_start = max(start_a, start_b)
+                    overlap_end = min(end_a, end_b)
+                    overlap_min = overlap_end - overlap_start
+
+                    warnings.append(
+                        f"CONFLICT: '{slots[i].task.name}' "
+                        f"({slots[i].start_time}–{self._minutes_to_time(end_a)}) "
+                        f"overlaps with '{slots[j].task.name}' "
+                        f"({slots[j].start_time}–{self._minutes_to_time(end_b)}) "
+                        f"by {overlap_min} min"
+                    )
+
+        return warnings
 
     def get_reasoning(self) -> str:
         """Return a human-readable explanation of all scheduling decisions."""

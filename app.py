@@ -117,24 +117,29 @@ if st.button("Generate Schedule"):
     scheduler.generate_plan()
     st.session_state.scheduler = scheduler
 
-if st.session_state.scheduler:
-    scheduler = st.session_state.scheduler
-    if scheduler.daily_plan:
-        schedule_data = [
-            {"Time": slot.start_time, "Task": slot.task.name,
-             "Category": slot.task.category, "Duration": f"{slot.task.duration} min",
-             "Occurrence": f"#{slot.occurrence}" if slot.task.frequency > 1 else "-"}
-            for slot in scheduler.daily_plan
-        ]
-        st.table(schedule_data)
+scheduler = st.session_state.scheduler
+if scheduler and scheduler.daily_plan:
+    def _format_slot(slot):
+        occ = f"#{slot.occurrence}" if slot.task.frequency > 1 else "-"
+        return {
+            "Time": slot.start_time,
+            "Task": slot.task.name,
+            "Category": slot.task.category,
+            "Duration": f"{slot.task.duration} min",
+            "Occurrence": occ,
+        }
 
-        unscheduled = scheduler.get_unscheduled_tasks()
-        if unscheduled:
-            st.warning("Could not fit:")
-            for task in unscheduled:
-                st.write(f"- {task.name} ({task.total_time()} min, {task.priority} priority)")
+    st.table([_format_slot(s) for s in scheduler.daily_plan])
 
-        with st.expander("Reasoning"):
-            st.text(scheduler.get_reasoning())
-    else:
-        st.info("No tasks to schedule.")
+    # Conflict warnings
+    for warning in scheduler.detect_conflicts():
+        st.warning(warning)
+
+    # Unscheduled tasks
+    for task in scheduler.get_unscheduled_tasks():
+        st.warning(f"Could not fit: {task.name} ({task.total_time()} min, {task.priority} priority)")
+
+    with st.expander("Reasoning"):
+        st.text(scheduler.get_reasoning())
+elif scheduler:
+    st.info("No tasks to schedule.")
